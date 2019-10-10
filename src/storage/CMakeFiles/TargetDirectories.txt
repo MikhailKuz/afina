@@ -1,0 +1,3 @@
+/home/mike/Documents/Github/afina/src/storage/CMakeFiles/rebuild_cache.dir
+/home/mike/Documents/Github/afina/src/storage/CMakeFiles/Storage.dir
+/home/mike/Documents/Github/afina/src/storage/CMakeFiles/edit_cache.dir
