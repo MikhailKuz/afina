@@ -93,7 +93,8 @@ bool SimpleLRU::PutNew(const std::string &key, const std::string &value){
     return true;
 }
 
-bool SimpleLRU::UpdateEl(std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>>::iterator upt_it, const std::string &value){
+bool SimpleLRU::UpdateEl(std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>,
+        std::less<std::string>>::iterator upt_it, const std::string &value){
     lru_node &edit_node = upt_it->second;
     if (!GetSpace(value.size() - edit_node.value.size()))
     {
@@ -110,15 +111,17 @@ void SimpleLRU::UpdatePos(lru_node &upt_node){
     } else if (&upt_node != _lru_tail)
     {
         upt_node.next->prev = upt_node.prev;
+    } else {
+        _lru_tail = _lru_tail->prev;
     }
 
     std::unique_ptr<lru_node> temp = std::move(upt_node.prev->next);
     temp->prev->next.swap(temp->next);
 
+    _lru_head->prev = temp.get();
     _lru_head.swap(temp->next);
-    temp->next->prev = temp.get();
-    temp->prev = nullptr;
-    _lru_head = std::move(temp);
+    _lru_head.swap(temp);
+    _lru_head->prev = nullptr;
 }
 
 bool SimpleLRU::GetSpace(std::size_t amount){
@@ -126,11 +129,12 @@ bool SimpleLRU::GetSpace(std::size_t amount){
         return false;
     }
     while (_max_size - _current_size < amount){
-       _current_size -= _lru_head->key.size() + _lru_head->value.size();
+       _current_size -= _lru_tail->key.size() + _lru_tail->value.size();
        _lru_index.erase(_lru_tail->key);
 
        if (_lru_tail->prev != nullptr){
-           _lru_tail->prev->next.reset();
+           _lru_tail = _lru_tail->prev;
+           _lru_tail->next.reset();
        } else {
            _lru_head.reset();
            _lru_tail = nullptr;
