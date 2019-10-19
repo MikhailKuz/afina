@@ -55,11 +55,7 @@ private:
     // Thread to run network on
     std::thread _thread;
 
-    std::mutex wk_mutex;
-    std::condition_variable wait_for_remains;
-
-    uint32_t max_work_amount = 0;
-    std::set<int> client_sockets;
+    Afina::Concurrency::Executor *executor;
 
     void Worker(int socket);
 };

@@ -81,12 +81,6 @@ void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers) {
 void ServerImpl::Stop() {
     running.store(false);
     shutdown(_server_socket, SHUT_RDWR);
-    {
-        std::lock_guard<std::mutex> lock(wk_mutex);
-        for (auto socket : client_sockets) {
-            shutdown(socket, SHUT_RD);
-        }
-    }
 }
 
 // See Server.h
@@ -94,12 +88,8 @@ void ServerImpl::Join() {
     assert(_thread.joinable());
     _thread.join();
     close(_server_socket);
-    {
-        std::unique_lock<std::mutex> lock(wk_mutex);
-        while (client_sockets.size() > 0) {
-            wait_for_remains.wait(lock);
-        }
-    }
+    executor->Stop(true);
+    delete executor;
 }
 
 // See Server.h
@@ -136,21 +126,13 @@ void ServerImpl::OnRun() {
             setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
         }
 
-        // TODO: Start new thread and process data from/to connection
-        {
-            std::lock_guard<std::mutex> lock(wk_mutex);
-            if (client_sockets.size() < max_work_amount)
-            {
-                client_sockets.insert(client_socket);
-                std::thread th(&ServerImpl::Worker, this, client_socket);
-                th.detach();
-            }
-            else
-            {
-                _logger->debug("Don't have free workers. Plese wait\n");
-                close(client_socket);
-            }
+        if (!(executor->Execute(&ServerImpl::exec, this, client_socket))) {
+            close(client_socket);
+            _logger->debug("No free workers to process this connection");
+            continue;
         }
+
+        close(client_socket);
     }
 
     // Cleanup on exit...
@@ -250,19 +232,6 @@ void ServerImpl::Worker(int client_socket) {
         }
     } catch (std::runtime_error &ex) {
         _logger->error("Failed to process connection on descriptor {}: {}", client_socket, ex.what());
-    }
-
-    std::lock_guard<std::mutex> lock(wk_mutex);
-    auto del_soc_it = client_sockets.find(client_socket);
-
-    if (del_soc_it != client_sockets.end())
-    {
-        close(client_socket);
-        client_sockets.erase(del_soc_it);
-    }
-
-    if (client_sockets.size() == 0) {
-        wait_for_remains.notify_one();
     }
 }
 
